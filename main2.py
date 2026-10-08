@@ -1,13 +1,27 @@
 import os
 import time
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import requests
 import google.generativeai as genai
 
-# ---------------- تنظیمات سرور ----------------
-# توکن ربات اصلی سرور (متصل به رندر)
-SERVER_BOT_TOKEN = "872030909:ak1SkM_p9O1XpLz9i1BLW-8eLZQYZuOqduw"
+# --- سرور وب ساختگی برای فعال‌سازی پلان رایگان رندر ---
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
 
-# دریافت کلید API مستقیماً از متغیرهای محیطی Render
+def run_health_check_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    server.serve_forever()
+
+# اجرای سرور وب در پس‌زمینه
+threading.Thread(target=run_health_check_server, daemon=True).start()
+
+# ---------------- تنظیمات سرور بله ----------------
+SERVER_BOT_TOKEN = "872030909:ak1SkM_p9O1XpLz9i1BLW-8eLZQYZuOqduw"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 if not GEMINI_API_KEY:
