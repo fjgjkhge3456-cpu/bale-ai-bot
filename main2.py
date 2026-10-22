@@ -1,67 +1,66 @@
 import os
-import time
-import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
 import requests
-import google.generativeai as genai
+from flask import Flask
+import threading
+import time
+from google import genai
 
-# --- سرور وب ساختگی برای فعال‌سازی پلان رایگان رندر ---
-class HealthCheckHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
+app = Flask(__name__)
 
-def run_health_check_server():
-    port = int(os.environ.get("PORT", 8080))
-    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
-    server.serve_forever()
-
-# اجرای سرور وب در پس‌زمینه
-threading.Thread(target=run_health_check_server, daemon=True).start()
-
-# ---------------- تنظیمات سرور بله ----------------
-SERVER_BOT_TOKEN = "872030909:ak1SkM_p9O1XpLz9i1BLW-8eLZQYZuOqduw"
+# دریافت متغیرهای محیطی
+SERVER_BOT_TOKEN = os.environ.get("SERVER_BOT_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-if not GEMINI_API_KEY:
-    print("⚠️ هشدار: متغیر GEMINI_API_KEY در پنل Render تنظیم نشده است!")
-
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
-
-URL = f"https://tapi.bale.ai/bot{SERVER_BOT_TOKEN}"
+# راه اندازی کلاینت جدید جمنای
+ai_client = genai.Client(api_key=GEMINI_API_KEY)
+URL_SERVER = f"https://tapi.bale.ai/bot{SERVER_BOT_TOKEN}"
 last_update_id = 0
 
-print("🚀 سرور هوش مصنوعی فعال شد و منتظر پیام است...")
+@app.route('/')
+def home():
+    return "Bot Server is Running Live!"
 
-while True:
-    try:
-        res = requests.get(f"{URL}/getUpdates", params={"offset": last_update_id + 1, "timeout": 10}, timeout=15).json()
-        
-        if res.get("ok") and res.get("result"):
-            for update in res["result"]:
-                last_update_id = update["update_id"]
-                message = update.get("message", {})
-                chat_id = message.get("chat", {}).get("id")
-                text = message.get("text", "")
+def process_updates():
+    global last_update_id
+    print("🚀 سرور هوش مصنوعی بله فعال شد...")
+    while True:
+        try:
+            res = requests.get(f"{URL_SERVER}/getUpdates", params={"offset": last_update_id + 1}, timeout=10).json()
+            if res.get("ok") and res.get("result"):
+                for update in res["result"]:
+                    up_id = update.get("update_id", 0)
+                    if up_id > last_update_id:
+                        last_update_id = up_id
+                        msg = update.get("message", {})
+                        chat_id = msg.get("chat", {}).get("id")
+                        text = msg.get("text", "")
+                        
+                        # پردازش پیام متنی دریافت شده
+                        if text and chat_id:
+                            print(f"📩 پیام دریافت شد: {text}")
+                            try:
+                                # تولید پاسخ با مدل استاندارد gemini-2.5-flash
+                                response = ai_client.models.generate_content(
+                                    model='gemini-2.5-flash',
+                                    contents=text,
+                                )
+                                reply_text = response.text
+                            except Exception as e:
+                                print(f"❌ خطای جمنای: {e}")
+                                reply_text = "متأسفانه در دریافت پاسخ از هوش مصنوعی خطایی رخ داد."
 
-                if text and chat_id:
-                    print(f"📩 پیام دریافت شد: {text}")
-                    
-                    try:
-                        response = model.generate_content(text)
-                        reply_text = response.text
-                    except Exception as e:
-                        reply_text = f"❌ خطا در پردازش هوش مصنوعی: {e}"
+                            # ارسال پاسخ به گروه در بله
+                            requests.post(f"{URL_SERVER}/sendMessage", json={
+                                "chat_id": chat_id,
+                                "text": reply_text
+                            })
+        except Exception as e:
+            print(f"⚠️ خطای شبکه یا ارتباط: {e}")
+        time.sleep(2)
 
-                    requests.post(f"{URL}/sendMessage", json={
-                        "chat_id": chat_id,
-                        "text": reply_text
-                    })
-                    print("پاسخ به بله ارسال شد.")
-                    
-    except Exception as e:
-        print(f"⚠️ خطا در ارتباط: {e}")
-    
-    time.sleep(2)
+# اجرای پردازش در پس‌زمینه
+threading.Thread(target=process_updates, daemon=True).start()
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
