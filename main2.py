@@ -18,11 +18,11 @@ last_update_id = 0
 
 @app.route('/')
 def home():
-    return "Bot Server is Running Live with Gemini 2.0 Flash Lite!"
+    return "Bot Server is Running Live with Gemini Flash!"
 
 def process_updates():
     global last_update_id
-    print("🚀 سرور هوش مصنوعی بله با مدل Gemini 2.0 Flash Lite فعال شد...")
+    print("🚀 سرور هوش مصنوعی بله با موفقیت فعال شد...")
     while True:
         try:
             res = requests.get(f"{URL_SERVER}/getUpdates", params={"offset": last_update_id + 1}, timeout=10).json()
@@ -38,9 +38,9 @@ def process_updates():
                         if text and chat_id:
                             print(f"📩 پیام دریافت شد: {text}")
                             try:
-                                # اتصال به مدل Gemini 2.0 Flash Lite
+                                # اتصال به مدل پیشرفته و سریع جمنای
                                 response = ai_client.models.generate_content(
-                                    model='gemini-2.0-flash-lite',
+                                    model='gemini-2.5-flash',
                                     contents=text,
                                 )
                                 reply_text = response.text
