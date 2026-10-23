@@ -35,13 +35,12 @@ def process_updates():
                         chat_id = msg.get("chat", {}).get("id")
                         text = msg.get("text", "")
                         
-                        # پردازش پیام متنی دریافت شده
                         if text and chat_id:
                             print(f"📩 پیام دریافت شد: {text}")
                             try:
-                                # تولید پاسخ با مدل استاندارد gemini-2.5-flash
+                                # استفاده از مدل Gemini 2.0 Flash Lite
                                 response = ai_client.models.generate_content(
-                                    model='gemini-2.5-flash',
+                                    model='gemini-2.0-flash-lite',
                                     contents=text,
                                 )
                                 reply_text = response.text
@@ -49,16 +48,16 @@ def process_updates():
                                 print(f"❌ خطای جمنای: {e}")
                                 reply_text = "متأسفانه در دریافت پاسخ از هوش مصنوعی خطایی رخ داد."
 
-                            # ارسال پاسخ به گروه در بله
+                            # ارسال پاسخ به بله
                             requests.post(f"{URL_SERVER}/sendMessage", json={
                                 "chat_id": chat_id,
                                 "text": reply_text
                             })
         except Exception as e:
-            print(f"⚠️ خطای شبکه یا ارتباط: {e}")
+            print(f"⚠️ خطای شبکه: {e}")
         time.sleep(2)
 
-# اجرای پردازش در پس‌زمینه
+# اجرای حلقه پردازش پیام‌ها در پس‌زمینه
 threading.Thread(target=process_updates, daemon=True).start()
 
 if __name__ == '__main__':
