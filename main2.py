@@ -10,10 +10,9 @@ import io
 
 app = Flask(__name__)
 
-# دریافت تنظیمات محیطی (هماهنگ با BALE_TOKEN در رندر)
+# دریافت تنظیمات محیطی از Render
 BALE_TOKEN = os.environ.get("BALE_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-ADMIN_ID = os.environ.get("ADMIN_ID")
 
 BALE_API_URL = f"https://tapi.bale.ai/bot{BALE_TOKEN}" if BALE_TOKEN else ""
 BALE_FILE_URL = f"https://tapi.bale.ai/file/bot{BALE_TOKEN}" if BALE_TOKEN else ""
@@ -31,33 +30,8 @@ if GEMINI_API_KEY:
     except Exception as e:
         print(f"!!! خطا در تنظیم API جمنای: {e} !!!", flush=True)
 
-# مدل‌های پایدار و پرسرعت پیش‌فرض برای جلوگیری از کندی و تایم‌اوت
-DEFAULT_MODELS = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro']
-
-def get_active_models():
-    models = []
-    if GEMINI_API_KEY:
-        try:
-            for m in genai.list_models():
-                if 'generateContent' in m.supported_generation_methods:
-                    models.append(m.name)
-        except Exception as e:
-            print(f"Error listing models: {e}", flush=True)
-    
-    if not models:
-        models = DEFAULT_MODELS
-    return models
-
-def clean_persian_colloquial(prompt):
-    words_to_remove = [
-        'عکس واقعی:', 'عکس فانتزی:', 'عکس جمنای:', 'عکس فلوکس:', 
-        'واقعی:', 'فانتزی:', 'جمنای:', 'فلوکس:', 'عکس:', 'ویرایش:',
-        'بزن', 'بیار', 'برام بیار', 'بکش', 'درست کن', 'بفرست'
-    ]
-    cleaned = prompt
-    for w in words_to_remove:
-        cleaned = cleaned.replace(w, '')
-    return cleaned.strip()
+# مدل‌های پایدار و پرسرعت برای جلوگیری از خطای قطعی
+MODELS_TO_TRY = ['gemini-1.5-flash', 'gemini-1.5-pro']
 
 def clean_bot_response(text):
     if not text:
@@ -75,17 +49,13 @@ def call_gemini_chat(text_prompt):
     if not GEMINI_API_KEY:
         return "❌ کلید API جمنای تنظیم نشده است."
     
-    available_models = get_active_models()
-    last_err = ""
-    
-    for model_name in available_models:
+    for model_name in MODELS_TO_TRY:
         try:
             model = genai.GenerativeModel(model_name, system_instruction=SYSTEM_INSTRUCTION)
             response = model.generate_content(text_prompt)
             if response and hasattr(response, 'text') and response.text:
                 return clean_bot_response(response.text)
         except Exception as e:
-            last_err = str(e)
             print(f"Chat error on {model_name}: {e}", flush=True)
             try:
                 model = genai.GenerativeModel(model_name)
@@ -96,7 +66,7 @@ def call_gemini_chat(text_prompt):
                 print(f"Inner error on {model_name}: {inner_e}", flush=True)
             continue
             
-    return f"⚠️ خطای جمنای: {last_err}" if last_err else "⚠️ مشکلی در پاسخگویی پیش آمد."
+    return "⚠️ خطایی در ارتباط با هوش مصنوعی رخ داد."
 
 def analyze_image_with_gemini(photo_bytes, user_question=""):
     if not GEMINI_API_KEY:
@@ -104,19 +74,15 @@ def analyze_image_with_gemini(photo_bytes, user_question=""):
     
     try:
         img = Image.open(io.BytesIO(photo_bytes))
-        prompt = user_question if user_question else "این تصویر را با دقت تحلیل کن و جزییاتش را به فارسی روان و صمیمی توضیح بده."
+        prompt = user_question if user_question else "این تصویر را با دقت تحلیل کن و جزئیاتش را به فارسی روان و صمیمی توضیح بده."
         
-        available_models = get_active_models()
-        last_err = ""
-        
-        for model_name in available_models:
+        for model_name in MODELS_TO_TRY:
             try:
                 model = genai.GenerativeModel(model_name, system_instruction=SYSTEM_INSTRUCTION)
                 response = model.generate_content([prompt, img])
                 if response and hasattr(response, 'text') and response.text:
                     return clean_bot_response(response.text)
             except Exception as model_err:
-                last_err = str(model_err)
                 print(f"Vision error on {model_name}: {model_err}", flush=True)
                 try:
                     model = genai.GenerativeModel(model_name)
@@ -127,9 +93,9 @@ def analyze_image_with_gemini(photo_bytes, user_question=""):
                     print(f"Inner vision error on {model_name}: {inner_err}", flush=True)
                 continue
 
-        return f"⚠️ تحلیل تصویر با خطا مواجه شد: {last_err}"
+        return "⚠️ تحلیل تصویر با خطا مواجه شد."
     except Exception as e:
-        return f"⚠️ خطا در پردازش فایل تصویر: {e}"
+        return f"⚠️ خطا در پردازش تصویر: {e}"
 
 def download_bale_file(file_id):
     try:
@@ -179,7 +145,7 @@ def generate_image_flux(english_prompt):
         return None, str(e)
 
 def translate_prompt(prompt):
-    cleaned = clean_persian_colloquial(prompt)
+    cleaned = prompt.replace("عکس:", "").replace("عکس", "").strip()
     p = f"Translate to clear English image prompt: '{cleaned}'. Return only plain text."
     res = call_gemini_chat(p)
     return res.replace('"', '').strip() if res else cleaned
@@ -201,7 +167,7 @@ def process_update_async(data):
         message = data["message"]
         chat_id = message["chat"]["id"]
 
-        # ۱. بخش دریافت و تحلیل عکس
+        # ۱. تحلیل عکس دریافتی
         if "photo" in message and isinstance(message["photo"], list):
             send_message(chat_id, "🔍 در حال دریافت و تحلیل تصویر...")
             photo_info = message["photo"][-1]
@@ -217,7 +183,7 @@ def process_update_async(data):
             send_message(chat_id, analysis_res)
             return
 
-        # ۲. بخش متن‌ها
+        # ۲. پیام‌های متنی
         text = message.get("text", "").strip()
         if not text:
             return
@@ -240,7 +206,7 @@ def process_update_async(data):
                 send_message(chat_id, "لطفاً توصیف عکسی که می‌خوای رو جلوی کلمه «عکس:» بنویس.")
             return
 
-        # چت متنی عادی
+        # پاسخ به چت متنی عادی
         answer = call_gemini_chat(text)
         send_message(chat_id, answer)
 
