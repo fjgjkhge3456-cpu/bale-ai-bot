@@ -225,7 +225,7 @@ def webhook():
     update_id = data.get("update_id")
     if update_id:
         if update_id in PROCESSED_UPDATES:
-            return jsonify({"status": "already processed"}), 200
+            return jsonify({"status": "already processed"}}, 200
         PROCESSED_UPDATES.add(update_id)
         if len(PROCESSED_UPDATES) > MAX_CACHE_SIZE:
             PROCESSED_UPDATES.clear()
@@ -233,5 +233,19 @@ def webhook():
     threading.Thread(target=process_update_async, args=(data,)).start()
     return jsonify({"status": "ok"}), 200
 
+# تنظیم خودکار وب‌هوک به محض بالا آمدن سرور
+def setup_webhook_automatically():
+    render_url = os.environ.get("RENDER_EXTERNAL_URL")
+    if render_url and BALE_TOKEN:
+        webhook_url = f"https://tapi.bale.ai/bot{BALE_TOKEN}/setWebhook?url={render_url}/"
+        try:
+            res = requests.get(webhook_url, timeout=10).json()
+            print(f"Auto Webhook Setup Result: {res}", flush=True)
+        except Exception as e:
+            print(f"Failed to auto setup webhook: {e}", flush=True)
+
+setup_webhook_automatically()
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
