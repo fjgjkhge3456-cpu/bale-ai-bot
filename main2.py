@@ -225,7 +225,7 @@ def webhook():
     update_id = data.get("update_id")
     if update_id:
         if update_id in PROCESSED_UPDATES:
-            return jsonify({"status": "already processed"}}, 200
+            return jsonify({"status": "already processed"}), 200
         PROCESSED_UPDATES.add(update_id)
         if len(PROCESSED_UPDATES) > MAX_CACHE_SIZE:
             PROCESSED_UPDATES.clear()
