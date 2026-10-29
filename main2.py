@@ -6,7 +6,6 @@ import google.generativeai as genai
 
 app = Flask(__name__)
 
-# دریافت توکن‌ها از محیط Render
 BALE_TOKEN = os.environ.get("BALE_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
@@ -15,7 +14,6 @@ BALE_API_URL = f"https://tapi.bale.ai/bot{BALE_TOKEN}" if BALE_TOKEN else ""
 PROCESSED_UPDATES = set()
 MAX_CACHE_SIZE = 2000
 
-# تنظیم کلید API جمنای
 if GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
@@ -49,13 +47,11 @@ def process_update_async(data):
             send_message(chat_id, "سلام! ربات هوش مصنوعی شما در بله آنلاین و آماده پاسخگویی است 👋🤖")
             return
 
-        # ارتباط مستقیم و ساده با مدل جمنای
         if not GEMINI_API_KEY:
             send_message(chat_id, "❌ خطای تنظیمات: کلید API جمنای در Render وارد نشده است.")
             return
 
         try:
-            # استفاده از مدل پایدار فلاش
             model = genai.GenerativeModel('gemini-1.5-flash')
             prompt = f"پاسخ را به زبان فارسی روان و صمیمی بنویس:\n\n{text}"
             response = model.generate_content(prompt)
@@ -80,7 +76,7 @@ def webhook():
 
     data = request.get_json()
     if not data:
-        return jsonify({"status": "ok"}}, 200
+        return jsonify({"status": "ok"}), 200
 
     update_id = data.get("update_id")
     if update_id:
@@ -91,9 +87,8 @@ def webhook():
             PROCESSED_UPDATES.clear()
 
     threading.Thread(target=process_update_async, args=(data,)).start()
-    return jsonify({"status": "ok"}}, 200
+    return jsonify({"status": "ok"}), 200
 
-# تنظیم خودکار وب‌هوک
 def setup_webhook_automatically():
     render_url = os.environ.get("RENDER_EXTERNAL_URL")
     if render_url and BALE_TOKEN:
