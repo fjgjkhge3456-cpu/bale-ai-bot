@@ -1,13 +1,12 @@
 import os
 import requests
 import threading
-import traceback
 from flask import Flask, request, jsonify
 import google.generativeai as genai
 
 app = Flask(__name__)
 
-# دریافت تنظیمات محیطی از Render
+# دریافت توکن‌ها از محیط Render
 BALE_TOKEN = os.environ.get("BALE_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
@@ -16,33 +15,13 @@ BALE_API_URL = f"https://tapi.bale.ai/bot{BALE_TOKEN}" if BALE_TOKEN else ""
 PROCESSED_UPDATES = set()
 MAX_CACHE_SIZE = 2000
 
+# تنظیم کلید API جمنای
 if GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        print("--- Gemini API آماده است ---", flush=True)
+        print("--- Gemini API configured successfully ---", flush=True)
     except Exception as e:
-        print(f"!!! خطا در تنظیم API جمنای: {e} !!!", flush=True)
-
-def call_gemini_chat(text_prompt):
-    if not GEMINI_API_KEY:
-        return "❌ کلید API جمنای در Render تنظیم نشده است."
-    
-    try:
-        # استفاده از مدل پایدار gemini-1.5-flash
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        
-        # گنجاندن دستورالعمل سیستم به صورت متن ساده در ابتدا برای جلوگیری از خطای نسخه کتابخانه
-        full_prompt = f"پاسخ را فقط و فقط به زبان فارسی روان، صمیمی و با استفاده مناسب از ایموجی بنویس.\n\n{text_prompt}"
-        
-        response = model.generate_content(full_prompt)
-        if response and hasattr(response, 'text') and response.text:
-            return response.text.strip()
-        else:
-            return "⚠️ پاسخ خالی از هوش مصنوعی دریافت شد."
-    except Exception as e:
-        err_details = traceback.format_exc()
-        print(f"Gemini Error Traceback:\n{err_details}", flush=True)
-        return f"⚠️ خطای فنی جمنای: {str(e)}"
+        print(f"Gemini config error: {e}", flush=True)
 
 def send_message(chat_id, text):
     if not BALE_API_URL or not text:
@@ -61,17 +40,34 @@ def process_update_async(data):
 
         message = data["message"]
         chat_id = message["chat"]["id"]
-
         text = message.get("text", "").strip()
+
         if not text:
             return
 
         if text == "/start":
-            send_message(chat_id, "سلام! خوش اومدی 👋🤖\nدستیار هوش مصنوعی شما کاملاً آماده است. سوالت رو بپرس!")
+            send_message(chat_id, "سلام! ربات هوش مصنوعی شما در بله آنلاین و آماده پاسخگویی است 👋🤖")
             return
 
-        # ارسال متن به جمنای و دریافت پاسخ
-        answer = call_gemini_chat(text)
+        # ارتباط مستقیم و ساده با مدل جمنای
+        if not GEMINI_API_KEY:
+            send_message(chat_id, "❌ خطای تنظیمات: کلید API جمنای در Render وارد نشده است.")
+            return
+
+        try:
+            # استفاده از مدل پایدار فلاش
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            prompt = f"پاسخ را به زبان فارسی روان و صمیمی بنویس:\n\n{text}"
+            response = model.generate_content(prompt)
+            
+            if response and hasattr(response, 'text') and response.text:
+                answer = response.text.strip()
+            else:
+                answer = "⚠️ پاسخ معتبری از هوش مصنوعی دریافت نشد."
+        except Exception as gemini_err:
+            print(f"Gemini API Execution Error: {gemini_err}", flush=True)
+            answer = f"⚠️ خطا در پردازش هوش مصنوعی: {str(gemini_err)}"
+
         send_message(chat_id, answer)
 
     except Exception as main_err:
@@ -84,7 +80,7 @@ def webhook():
 
     data = request.get_json()
     if not data:
-        return jsonify({"status": "ok"}), 200
+        return jsonify({"status": "ok"}}, 200
 
     update_id = data.get("update_id")
     if update_id:
@@ -95,7 +91,7 @@ def webhook():
             PROCESSED_UPDATES.clear()
 
     threading.Thread(target=process_update_async, args=(data,)).start()
-    return jsonify({"status": "ok"}), 200
+    return jsonify({"status": "ok"}}, 200
 
 # تنظیم خودکار وب‌هوک
 def setup_webhook_automatically():
