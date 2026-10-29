@@ -31,6 +31,28 @@ def send_message(chat_id, text):
     except Exception as e:
         print(f"Error sending message: {e}", flush=True)
 
+def call_gemini_chat(text_prompt):
+    if not GEMINI_API_KEY:
+        return "❌ کلید API جمنای تنظیم نشده است."
+    
+    # لیست مدل‌های استاندارد برای تست خودکار و جلوگیری از خطای 404
+    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
+    last_err = ""
+    
+    for model_name in models_to_try:
+        try:
+            model = genai.GenerativeModel(model_name)
+            prompt = f"پاسخ را به زبان فارسی روان و صمیمی بنویس:\n\n{text_prompt}"
+            response = model.generate_content(prompt)
+            if response and hasattr(response, 'text') and response.text:
+                return response.text.strip()
+        except Exception as e:
+            last_err = str(e)
+            print(f"Error with model {model_name}: {e}", flush=True)
+            continue
+            
+    return f"⚠️ خطا در ارتباط با هوش مصنوعی: {last_err}"
+
 def process_update_async(data):
     try:
         if not data or "message" not in data:
@@ -47,23 +69,8 @@ def process_update_async(data):
             send_message(chat_id, "سلام! ربات هوش مصنوعی شما در بله آنلاین و آماده پاسخگویی است 👋🤖")
             return
 
-        if not GEMINI_API_KEY:
-            send_message(chat_id, "❌ خطای تنظیمات: کلید API جمنای در Render وارد نشده است.")
-            return
-
-        try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            prompt = f"پاسخ را به زبان فارسی روان و صمیمی بنویس:\n\n{text}"
-            response = model.generate_content(prompt)
-            
-            if response and hasattr(response, 'text') and response.text:
-                answer = response.text.strip()
-            else:
-                answer = "⚠️ پاسخ معتبری از هوش مصنوعی دریافت نشد."
-        except Exception as gemini_err:
-            print(f"Gemini API Execution Error: {gemini_err}", flush=True)
-            answer = f"⚠️ خطا در پردازش هوش مصنوعی: {str(gemini_err)}"
-
+        # دریافت پاسخ از جمنای و ارسال به بله
+        answer = call_gemini_chat(text)
         send_message(chat_id, answer)
 
     except Exception as main_err:
