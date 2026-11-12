@@ -31,27 +31,37 @@ def send_message(chat_id, text):
     except Exception as e:
         print(f"Error sending message: {e}", flush=True)
 
+def get_best_model():
+    # استعلام خودکار مدل‌های فعال اکانت شما از سرور گوگل
+    try:
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                return m.name
+    except Exception as e:
+        print(f"Error listing models: {e}", flush=True)
+    
+    # مدل پیش‌فرض پشتیبان
+    return 'gemini-1.5-flash'
+
 def call_gemini_chat(text_prompt):
     if not GEMINI_API_KEY:
         return "❌ کلید API جمنای تنظیم نشده است."
     
-    # لیست مدل‌های استاندارد برای تست خودکار و جلوگیری از خطای 404
-    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
-    last_err = ""
-    
-    for model_name in models_to_try:
-        try:
-            model = genai.GenerativeModel(model_name)
-            prompt = f"پاسخ را به زبان فارسی روان و صمیمی بنویس:\n\n{text_prompt}"
-            response = model.generate_content(prompt)
-            if response and hasattr(response, 'text') and response.text:
-                return response.text.strip()
-        except Exception as e:
-            last_err = str(e)
-            print(f"Error with model {model_name}: {e}", flush=True)
-            continue
-            
-    return f"⚠️ خطا در ارتباط با هوش مصنوعی: {last_err}"
+    try:
+        model_name = get_best_model()
+        print(using model: {model_name}, flush=True)
+        
+        model = genai.GenerativeModel(model_name)
+        prompt = f"پاسخ را به زبان فارسی روان و صمیمی بنویس:\n\n{text_prompt}"
+        response = model.generate_content(prompt)
+        
+        if response and hasattr(response, 'text') and response.text:
+            return response.text.strip()
+        else:
+            return "⚠️ پاسخ معتبری از هوش مصنوعی دریافت نشد."
+    except Exception as e:
+        print(f"Gemini Execution Error: {e}", flush=True)
+        return f"⚠️ خطا در ارتباط با هوش مصنوعی: {str(e)}"
 
 def process_update_async(data):
     try:
