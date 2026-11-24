@@ -32,15 +32,12 @@ def send_message(chat_id, text):
         print(f"Error sending message: {e}", flush=True)
 
 def get_best_model():
-    # استعلام خودکار مدل‌های فعال اکانت شما از سرور گوگل
     try:
         for m in genai.list_models():
             if 'generateContent' in m.supported_generation_methods:
                 return m.name
     except Exception as e:
         print(f"Error listing models: {e}", flush=True)
-    
-    # مدل پیش‌فرض پشتیبان
     return 'gemini-1.5-flash'
 
 def call_gemini_chat(text_prompt):
@@ -49,7 +46,7 @@ def call_gemini_chat(text_prompt):
     
     try:
         model_name = get_best_model()
-        print(using model: {model_name}, flush=True)
+        print(f"using model: {model_name}", flush=True) # اصلاح نقل قول
         
         model = genai.GenerativeModel(model_name)
         prompt = f"پاسخ را به زبان فارسی روان و صمیمی بنویس:\n\n{text_prompt}"
@@ -79,7 +76,6 @@ def process_update_async(data):
             send_message(chat_id, "سلام! ربات هوش مصنوعی شما در بله آنلاین و آماده پاسخگویی است 👋🤖")
             return
 
-        # دریافت پاسخ از جمنای و ارسال به بله
         answer = call_gemini_chat(text)
         send_message(chat_id, answer)
 
@@ -88,9 +84,19 @@ def process_update_async(data):
 
 @app.route('/', methods=['POST', 'GET'])
 def webhook():
+    # اگر کسی با مرورگر سایت را باز کرد (متد GET)
     if request.method == 'GET':
-        return "Server is Live!", 200
+        return """
+        <html>
+            <head><title>Arian Chat Bot</title></head>
+            <body style="font-family: Tahoma; text-align: center; padding-top: 50px;">
+                <h1>🤖 Arian Chat AI Server is Live & Running!</h1>
+                <p>این سرور به عنوان میزبان ربات هوش مصنوعی در پیام‌رسان بله فعال است.</p>
+            </body>
+        </html>
+        """, 200
 
+    # اگر پیام از طرف ربات بله آمد (متد POST)
     data = request.get_json()
     if not data:
         return jsonify({"status": "ok"}), 200
