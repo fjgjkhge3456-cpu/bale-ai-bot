@@ -3,6 +3,8 @@ import requests
 import threading
 from flask import Flask, request, jsonify, render_template_string
 import google.generativeai as genai
+from PIL import Image
+import io
 
 app = Flask(__name__)
 
@@ -31,18 +33,25 @@ def send_message(chat_id, text):
     except Exception as e:
         print(f"Error sending message: {e}", flush=True)
 
-def call_gemini_chat(text_prompt):
+def call_gemini_chat(text_prompt, image_file=None):
     if not GEMINI_API_KEY:
         return "❌ کلید API جمنای تنظیم نشده است."
     
     try:
-        # استفاده مستقیم از مدل پایدار و مطمئن
-        model_name = 'gemini-2.5-flash'
+        # استفاده از مدل جدید پیشنهادی گوگل
+        model_name = 'gemini-3-flash-preview'
         print(f"using model: {model_name}", flush=True)
         
         model = genai.GenerativeModel(model_name)
-        prompt = f"پاسخ را به زبان فارسی روان و صمیمی بنویس:\n\n{text_prompt}"
-        response = model.generate_content(prompt)
+        
+        # اگر تصویر ارسال شده باشد، همراه متن به جمنای ارسال می‌شود
+        if image_file:
+            img = Image.open(image_file)
+            prompt_content = [text_prompt if text_prompt else "این تصویر را تحلیل کن و توضیح بده:", img]
+        else:
+            prompt_content = f"پاسخ را به زبان فارسی روان و صمیمی بنویس:\n\n{text_prompt}"
+        
+        response = model.generate_content(prompt_content)
         
         if response and hasattr(response, 'text') and response.text:
             return response.text.strip()
@@ -74,7 +83,7 @@ def process_update_async(data):
     except Exception as main_err:
         print(f"Error in process_update_async: {main_err}", flush=True)
 
-# قالب صفحه چت وب برای نمایش در مرورگر
+# قالب صفحه چت وب همراه با دکمه انتخاب تصویر
 CHAT_PAGE_HTML = """
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -84,61 +93,95 @@ CHAT_PAGE_HTML = """
     <title>آرین چت | هوش مصنوعی</title>
     <style>
         body { font-family: Tahoma, sans-serif; background-color: #f4f4f9; margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .chat-container { width: 100%; max-width: 600px; height: 90vh; background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; }
+        .chat-container { width: 100%; max-width: 650px; height: 92vh; background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; }
         .chat-header { background: #4f46e5; color: white; padding: 15px; text-align: center; font-size: 18px; font-weight: bold; }
         .chat-box { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: #fafafa; }
         .message { padding: 10px 15px; border-radius: 8px; max-width: 75%; line-height: 1.6; word-wrap: break-word; }
         .user-message { background: #4f46e5; color: white; align-self: flex-start; border-bottom-left-radius: 2px; }
         .bot-message { background: #e5e7eb; color: #1f2937; align-self: flex-end; border-bottom-right-radius: 2px; }
-        .chat-input-area { display: flex; padding: 12px; background: white; border-top: 1px solid #e5e7eb; gap: 10px; }
-        .chat-input-area input { flex: 1; padding: 10px 15px; border: 1px solid #d1d5db; border-radius: 6px; outline: none; font-size: 14px; }
-        .chat-input-area button { background: #4f46e5; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .chat-input-area button:hover { background: #4338ca; }
+        .chat-input-area { display: flex; padding: 12px; background: white; border-top: 1px solid #e5e7eb; gap: 8px; align-items: center; }
+        .chat-input-area input[type="text"] { flex: 1; padding: 10px 15px; border: 1px solid #d1d5db; border-radius: 6px; outline: none; font-size: 14px; }
+        .file-upload-btn { background: #f3f4f6; border: 1px solid #d1d5db; padding: 10px 12px; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+        .file-upload-btn:hover { background: #e5e7eb; }
+        .chat-input-area button.send-btn { background: #4f46e5; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .chat-input-area button.send-btn:hover { background: #4338ca; }
+        #imageInput { display: none; }
+        .file-name-display { font-size: 11px; color: #059669; margin-right: 5px; }
     </style>
 </head>
 <body>
     <div class="chat-container">
         <div class="chat-header">🤖 چت با هوش مصنوعی آرین</div>
         <div class="chat-box" id="chatBox">
-            <div class="message bot-message">سلام! من هوش مصنوعی آرین هستم. چطور می‌توانم کمکت کنم؟ 👋</div>
+            <div class="message bot-message">سلام! من هوش مصنوعی آرین هستم. می‌توانی پیام بنویسی یا عکس آپلود کنی تا کمکت کنم! 👋📸</div>
         </div>
+        <div style="padding: 0 15px;"><span id="fileLabel" class="file-name-display"></span></div>
         <div class="chat-input-area">
+            <label for="imageInput" class="file-upload-btn" title="انتخاب تصویر">📎 عکس</label>
+            <input type="file" id="imageInput" accept="image/*" onchange="showFileName()">
             <input type="text" id="userInput" placeholder="پیام خود را اینجا بنویسید..." onkeypress="handleKeyPress(event)">
-            <button onclick="sendMessage()">ارسال</button>
+            <button class="send-btn" onclick="sendMessage()">ارسال</button>
         </div>
     </div>
 
     <script>
+        function showFileName() {
+            const fileInput = document.getElementById('imageInput');
+            const fileLabel = document.getElementById('fileLabel');
+            if (fileInput.files.length > 0) {
+                fileLabel.textContent = "📁 عکس انتخاب شد: " + fileInput.files[0].name;
+            } else {
+                fileLabel.textContent = "";
+            }
+        }
+
         async function sendMessage() {
             const inputField = document.getElementById('userInput');
+            const fileInput = document.getElementById('imageInput');
             const chatBox = document.getElementById('chatBox');
+            const fileLabel = document.getElementById('fileLabel');
+            
             const text = inputField.value.trim();
-            if (!text) return;
+            const hasFile = fileInput.files.length > 0;
 
+            if (!text && !hasFile) return;
+
+            // نمایش پیام کاربر در صفحه
             const userDiv = document.createElement('div');
             userDiv.className = 'message user-message';
-            userDiv.textContent = text;
+            userDiv.textContent = text + (hasFile ? " [📷 همراه با تصویر]" : "");
             chatBox.appendChild(userDiv);
+            
             inputField.value = '';
             chatBox.scrollTop = chatBox.scrollHeight;
 
+            // نمایش حالت در حال تفکر
             const botDiv = document.createElement('div');
             botDiv.className = 'message bot-message';
-            botDiv.textContent = 'در حال تفکر... 🤖';
+            botDiv.textContent = 'در حال تحلیل و تفکر... 🤖';
             chatBox.appendChild(botDiv);
             chatBox.scrollTop = chatBox.scrollHeight;
 
             try {
+                const formData = new FormData();
+                formData.append('message', text);
+                if (hasFile) {
+                    formData.append('image', fileInput.files[0]);
+                }
+
                 const response = await fetch('/api/web-chat', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text })
+                    body: formData
                 });
                 const data = await response.json();
                 botDiv.textContent = data.response || data.error || 'خطایی رخ داد.';
             } catch (err) {
                 botDiv.textContent = '⚠️ خطا در اتصال به سرور.';
             }
+
+            // پاک کردن انتخاب فایل بعد از ارسال
+            fileInput.value = '';
+            fileLabel.textContent = '';
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
@@ -175,12 +218,13 @@ def webhook_or_home():
 @app.route('/api/web-chat', methods=['POST'])
 def web_chat_api():
     try:
-        data = request.get_json()
-        user_message = data.get('message', '').strip()
-        if not user_message:
-            return jsonify({"error": "پیامی وارد نشده است"}), 400
+        user_message = request.form.get('message', '').strip()
+        image_file = request.files.get('image', None)
 
-        answer = call_gemini_chat(user_message)
+        if not user_message and not image_file:
+            return jsonify({"error": "پیام یا تصویری وارد نشده است"}), 400
+
+        answer = call_gemini_chat(user_message, image_file)
         return jsonify({"response": answer}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
