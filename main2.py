@@ -32,8 +32,8 @@ def send_message(chat_id, text):
         print(f"Error sending message: {e}", flush=True)
 
 def get_best_model():
-    # تنظیم روی مدل جدید gemini-2.5-flash
-    return 'gemini-2.5-flash'
+    # تنظیم روی مدل جدید و قدرتمند gemini-3-flash-preview
+    return 'gemini-3-flash-preview'
 
 def call_gemini_chat(text_prompt):
     if not GEMINI_API_KEY:
