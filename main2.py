@@ -32,13 +32,8 @@ def send_message(chat_id, text):
         print(f"Error sending message: {e}", flush=True)
 
 def get_best_model():
-    try:
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                return m.name
-    except Exception as e:
-        print(f"Error listing models: {e}", flush=True)
-    return 'gemini-1.5-flash'
+    # استفاده از مدل پایدار و مطمئن برای جلوگیری از خطای 404
+    return 'gemini-2.0-flash'
 
 def call_gemini_chat(text_prompt):
     if not GEMINI_API_KEY:
@@ -98,7 +93,7 @@ CHAT_PAGE_HTML = """
         .message { padding: 10px 15px; border-radius: 8px; max-width: 75%; line-height: 1.6; word-wrap: break-word; }
         .user-message { background: #4f46e5; color: white; align-self: flex-start; border-bottom-left-radius: 2px; }
         .bot-message { background: #e5e7eb; color: #1f2937; align-self: flex-end; border-bottom-right-radius: 2px; }
-        .chat-input-area { display: dict; padding: 12px; background: white; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; }
+        .chat-input-area { display: flex; padding: 12px; background: white; border-top: 1px solid #e5e7eb; gap: 10px; }
         .chat-input-area input { flex: 1; padding: 10px 15px; border: 1px solid #d1d5db; border-radius: 6px; outline: none; font-size: 14px; }
         .chat-input-area button { background: #4f46e5; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .chat-input-area button:hover { background: #4338ca; }
@@ -123,7 +118,6 @@ CHAT_PAGE_HTML = """
             const text = inputField.value.trim();
             if (!text) return;
 
-            // نمایش پیام کاربر
             const userDiv = document.createElement('div');
             userDiv.className = 'message user-message';
             userDiv.textContent = text;
@@ -131,7 +125,6 @@ CHAT_PAGE_HTML = """
             inputField.value = '';
             chatBox.scrollTop = chatBox.scrollHeight;
 
-            // نمایش پیام در حال نوشتن ربات
             const botDiv = document.createElement('div');
             botDiv.className = 'message bot-message';
             botDiv.textContent = 'در حال تفکر... 🤖';
@@ -164,11 +157,9 @@ CHAT_PAGE_HTML = """
 
 @app.route('/', methods=['POST', 'GET'])
 def webhook_or_home():
-    # اگر کسی آدرس سایت را در مرورگر باز کرد (متد GET)، صفحه چت را نشان بده
     if request.method == 'GET':
         return render_template_string(CHAT_PAGE_HTML)
 
-    # اگر درخواست از سمت پیام‌رسان بله آمد (متد POST)
     data = request.get_json()
     if not data:
         return jsonify({"status": "ok"}), 200
@@ -184,7 +175,6 @@ def webhook_or_home():
     threading.Thread(target=process_update_async, args=(data,)).start()
     return jsonify({"status": "ok"}), 200
 
-# مسیر جدید برای دریافت پیام از صفحه چت سایت
 @app.route('/api/web-chat', methods=['POST'])
 def web_chat_api():
     try:
