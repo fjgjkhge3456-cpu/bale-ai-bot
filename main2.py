@@ -32,8 +32,16 @@ def send_message(chat_id, text):
         print(f"Error sending message: {e}", flush=True)
 
 def get_best_model():
-    # تنظیم دقیق روی مدل سبک و سریع gemini-2.5-flash-lite
-    return 'gemini-2.5-flash-lite'
+    # استعلام خودکار بهترین مدل فعال از سرور گوگل
+    try:
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                return m.name
+    except Exception as e:
+        print(f"Error listing models: {e}", flush=True)
+    
+    # مدل پیش‌فرض پشتیبان
+    return 'gemini-1.5-flash'
 
 def call_gemini_chat(text_prompt):
     if not GEMINI_API_KEY:
