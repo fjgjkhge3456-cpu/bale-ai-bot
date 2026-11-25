@@ -31,24 +31,13 @@ def send_message(chat_id, text):
     except Exception as e:
         print(f"Error sending message: {e}", flush=True)
 
-def get_best_model():
-    # استعلام خودکار بهترین مدل فعال از سرور گوگل
-    try:
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                return m.name
-    except Exception as e:
-        print(f"Error listing models: {e}", flush=True)
-    
-    # مدل پیش‌فرض پشتیبان
-    return 'gemini-1.5-flash'
-
 def call_gemini_chat(text_prompt):
     if not GEMINI_API_KEY:
         return "❌ کلید API جمنای تنظیم نشده است."
     
     try:
-        model_name = get_best_model()
+        # استفاده مستقیم از مدل پایدار و مطمئن
+        model_name = 'gemini-2.5-flash'
         print(f"using model: {model_name}", flush=True)
         
         model = genai.GenerativeModel(model_name)
