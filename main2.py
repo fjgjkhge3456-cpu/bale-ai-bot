@@ -32,8 +32,8 @@ def send_message(chat_id, text):
         print(f"Error sending message: {e}", flush=True)
 
 def get_best_model():
-    # استفاده از مدل پایدار و مطمئن برای جلوگیری از خطای 404
-    return 'gemini-2.0-flash'
+    # تنظیم روی مدل جدید gemini-2.5-flash
+    return 'gemini-2.5-flash'
 
 def call_gemini_chat(text_prompt):
     if not GEMINI_API_KEY:
