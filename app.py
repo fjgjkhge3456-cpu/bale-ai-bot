@@ -113,34 +113,42 @@ else:
     t_cnt, i_cnt, v_cnt = u_data if u_data else (0, 0, 0)
     conn.close()
 
-    # ----------------- چت هوشمند جمنای با قابلیت ارسال تصویر -----------------
+    # ----------------- چت هوشمند جمنای با قابلیت ارسال تصویر در پایین -----------------
     if menu == "💬 چت هوشمند و تحلیل تصویر":
         st.title("💬 چت هوشمند و تحلیل تصویر (Google Gemini)")
-        st.write(f"سلام {st.session_state.user_name} جان! می‌توانی پیام بنویسی یا عکس آپلود کنی تا کمکت کنم.")
+        st.write(f"سلام {st.session_state.user_name} جان! می‌توانی پیام بنویسی یا از طریق دکمه پایین عکس آپلود کنی.")
         
-        # بخش آپلود تصویر
-        uploaded_image = st.file_uploader("📎 آپلود تصویر (اختیاری برای تحلیل یا حل مسئله):", type=["jpg", "png", "jpeg"])
-        if uploaded_image:
-            st.image(uploaded_image, caption="تصویر انتخاب شده", width=300)
-
         # نمایش تاریخچه چت
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        if user_prompt := st.chat_input("پیام خود را بنویسید..."):
+        # قرار دادن دکمه آپلود تصویر در کنار ورودی چت با استفاده از ستون‌بندی
+        col1, col2 = st.columns([4, 1])
+        with col2:
+            uploaded_image = st.file_uploader("📎 آپلود عکس", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
+        
+        with col1:
+            user_prompt = st.chat_input("پیام خود را بنویسید...")
+
+        if uploaded_image:
+            st.image(uploaded_image, caption="تصویر انتخاب شده برای ارسال", width=200)
+
+        if user_prompt or uploaded_image:
             if t_cnt >= 200:
                 st.error("❌ سهمیه پیام امروز شما تمام شده است!")
             else:
+                prompt_text = user_prompt if user_prompt else "این تصویر را تحلیل کن و توضیح بده:"
+                
                 conn = sqlite3.connect("database.db", check_same_thread=False)
                 cursor = conn.cursor()
                 cursor.execute("UPDATE users SET text_count = text_count + 1 WHERE phone = ?", (st.session_state.user_phone,))
                 conn.commit()
                 conn.close()
                 
-                log_activity(st.session_state.user_phone, st.session_state.user_name, "چت", user_prompt)
+                log_activity(st.session_state.user_phone, st.session_state.user_name, "چت", prompt_text)
                 
-                display_text = user_prompt + (" [📷 همراه با عکس]" if uploaded_image else "")
+                display_text = prompt_text + (" [📷 همراه با عکس]" if uploaded_image else "")
                 st.session_state.messages.append({"role": "user", "content": display_text})
                 
                 with st.chat_message("user"):
@@ -148,17 +156,17 @@ else:
 
                 with st.chat_message("assistant"):
                     try:
-                        # استفاده از مدل پایدار جدید
-                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        # استفاده از مدل جدید و بدون خطای گوگل
+                        model = genai.GenerativeModel('gemini-3-flash-preview')
                         
                         if uploaded_image:
                             img = Image.open(uploaded_image)
-                            prompt_content = [f"پاسخ را به زبان فارسی روان، دقیق و صمیمی بده:\n\n{user_prompt if user_prompt else 'این تصویر را تحلیل کن'}", img]
+                            prompt_content = [f"پاسخ را به زبان فارسی روان، دقیق و صمیمی بده:\n\n{prompt_text}", img]
                             response = model.generate_content(prompt_content)
                             full_response = response.text if response and response.text else "⚠️ پاسخ معتبری دریافت نشد."
                             st.markdown(full_response)
                         else:
-                            full_prompt = f"پاسخ را به زبان فارسی روان، دقیق و صمیمی بده:\n\n{user_prompt}"
+                            full_prompt = f"پاسخ را به زبان فارسی روان، دقیق و صمیمی بده:\n\n{prompt_text}"
                             response_stream = model.generate_content(full_prompt, stream=True)
                             
                             def generate_chunks():
