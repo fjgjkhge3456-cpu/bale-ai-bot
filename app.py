@@ -3,7 +3,7 @@ import sqlite3
 import datetime
 import os
 import google.generativeai as genai
-from PIL import Image, ImageEnhance, ImageOps
+from PIL import Image
 
 # تنظیمات اصلی صفحه
 st.set_page_config(page_title="آرین چت | هوش مصنوعی", page_icon="🤖", layout="centered")
@@ -113,17 +113,17 @@ else:
     t_cnt, i_cnt, v_cnt = u_data if u_data else (0, 0, 0)
     conn.close()
 
-    # ----------------- چت هوشمند جمنای با قابلیت ارسال تصویر در پایین -----------------
+    # ----------------- چت هوشمند جمنای با حافظه کامل و قابلیت ارسال تصویر -----------------
     if menu == "💬 چت هوشمند و تحلیل تصویر":
-        st.title("💬 چت هوشمند و تحلیل تصویر (Google Gemini)")
-        st.write(f"سلام {st.session_state.user_name} جان! می‌توانی پیام بنویسی یا از طریق دکمه پایین عکس آپلود کنی.")
+        st.title("💬 چت هوشمند با حافظه و تحلیل تصویر")
+        st.write(f"سلام {st.session_state.user_name} جان! من تمام صحبت‌های قبلی‌مان (مثل سن و علایقت) را به خاطر می‌سپارم.")
         
-        # نمایش تاریخچه چت
+        # نمایش تاریخچه چت قبلی
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        # قرار دادن دکمه آپلود تصویر در کنار ورودی چت با استفاده از ستون‌بندی
+        # قرار دادن دکمه آپلود تصویر در کنار ورودی چت
         col1, col2 = st.columns([4, 1])
         with col2:
             uploaded_image = st.file_uploader("📎 آپلود عکس", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
@@ -156,18 +156,25 @@ else:
 
                 with st.chat_message("assistant"):
                     try:
-                        # استفاده از مدل جدید و بدون خطای گوگل
                         model = genai.GenerativeModel('gemini-3-flash-preview')
                         
+                        # ساخت تاریخچه استاندارد برای مدل جهت حفظ حافظه گفتگو
+                        gemini_history = []
+                        for m in st.session_state.messages[:-1]:
+                            role = "user" if m["role"] == "user" else "model"
+                            # پاک کردن برچسب‌های کمکی از تاریخچه
+                            clean_content = m["content"].replace(" [📷 همراه با عکس]", "")
+                            gemini_history.append({"role": role, "parts": [clean_content]})
+
+                        chat_session = model.start_chat(history=gemini_history)
+
                         if uploaded_image:
                             img = Image.open(uploaded_image)
-                            prompt_content = [f"پاسخ را به زبان فارسی روان، دقیق و صمیمی بده:\n\n{prompt_text}", img]
-                            response = model.generate_content(prompt_content)
+                            response = chat_session.send_message([prompt_text, img])
                             full_response = response.text if response and response.text else "⚠️ پاسخ معتبری دریافت نشد."
                             st.markdown(full_response)
                         else:
-                            full_prompt = f"پاسخ را به زبان فارسی روان، دقیق و صمیمی بده:\n\n{prompt_text}"
-                            response_stream = model.generate_content(full_prompt, stream=True)
+                            response_stream = chat_session.send_message(prompt_text, stream=True)
                             
                             def generate_chunks():
                                 for chunk in response_stream:
