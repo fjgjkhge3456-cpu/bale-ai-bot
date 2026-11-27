@@ -6,7 +6,7 @@ import google.generativeai as genai
 from PIL import Image, ImageEnhance, ImageOps
 
 # تنظیمات اصلی صفحه
-st.set_page_config(page_title="آرین چت | هوش مصنوعی", page_icon="🤖", layout="centered")
+st.set_page_config(page_title="ربات هوش مصنوعی آرین", page_icon="🤖", layout="centered")
 
 # دریافت کلید API از متغیرهای محیطی Render
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
@@ -78,7 +78,7 @@ def get_or_create_user(phone, name):
 
 # ----------------- سیستم ورود -----------------
 if not st.session_state.authenticated:
-    st.title("🔐 ورود به هوش مصنوعی آرین")
+    st.title("🔐 ورود به ربات هوش مصنوعی")
     st.write("لطفاً نام و شماره تلفن خود را وارد کنید تا وارد سامانه شوید.")
     
     name_input = st.text_input("نام و نام خانوادگی:")
@@ -101,9 +101,9 @@ else:
         st.session_state.authenticated = False
         st.rerun()
 
-    menu = st.sidebar.selectbox(
+    menu = st.selectbox(
         "منوی اصلی سایت 👇",
-        ["💬 چت هوشمند و تحلیل تصویر", "🎨 تولید با Flux و ویرایش آزاد عکس", "🎬 استودیوی ویدیوی واقعی", "🔑 بخش ادمین"]
+        ["💬 چت هوشمند (Gemini)", "🎨 تولید با Flux و ویرایش آزاد عکس", "🎬 استودیوی ویدیوی واقعی", "🔑 بخش ادمین"]
     )
 
     conn = sqlite3.connect("database.db", check_same_thread=False)
@@ -113,16 +113,11 @@ else:
     t_cnt, i_cnt, v_cnt = u_data if u_data else (0, 0, 0)
     conn.close()
 
-    # ----------------- چت هوشمند جمنای با قابلیت ارسال تصویر -----------------
-    if menu == "💬 چت هوشمند و تحلیل تصویر":
-        st.title("💬 چت هوشمند و تحلیل تصویر (Google Gemini)")
-        st.write(f"سلام {st.session_state.user_name} جان! می‌توانی پیام بنویسی یا عکس آپلود کنی تا کمکت کنم.")
+    # ----------------- چت هوشمند جمنای با دریافت هوشمند مدل‌ها -----------------
+    if menu == "💬 چت هوشمند (Gemini)":
+        st.title("💬 چت هوشمند زنده (Google Gemini)")
+        st.write(f"سلام {st.session_state.user_name} جان! سوالت رو بپرس تا کلمه‌به‌کلمه برات تایپ کنم.")
         
-        # بخش آپلود تصویر
-        uploaded_image = st.file_uploader("📎 آپلود تصویر (اختیاری برای تحلیل یا حل مسئله):", type=["jpg", "png", "jpeg"])
-        if uploaded_image:
-            st.image(uploaded_image, caption="تصویر انتخاب شده", width=300)
-
         # نمایش تاریخچه چت
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
@@ -140,37 +135,60 @@ else:
                 
                 log_activity(st.session_state.user_phone, st.session_state.user_name, "چت", user_prompt)
                 
-                display_text = user_prompt + (" [📷 همراه با عکس]" if uploaded_image else "")
-                st.session_state.messages.append({"role": "user", "content": display_text})
-                
+                st.session_state.messages.append({"role": "user", "content": user_prompt})
                 with st.chat_message("user"):
-                    st.markdown(display_text)
+                    st.markdown(user_prompt)
 
                 with st.chat_message("assistant"):
-                    try:
-                        # استفاده از مدل پایدار جدید
-                        model = genai.GenerativeModel('gemini-2.5-flash')
-                        
-                        if uploaded_image:
-                            img = Image.open(uploaded_image)
-                            prompt_content = [f"پاسخ را به زبان فارسی روان، دقیق و صمیمی بده:\n\n{user_prompt if user_prompt else 'این تصویر را تحلیل کن'}", img]
-                            response = model.generate_content(prompt_content)
-                            full_response = response.text if response and response.text else "⚠️ پاسخ معتبری دریافت نشد."
-                            st.markdown(full_response)
-                        else:
-                            full_prompt = f"پاسخ را به زبان فارسی روان، دقیق و صمیمی بده:\n\n{user_prompt}"
-                            response_stream = model.generate_content(full_prompt, stream=True)
-                            
-                            def generate_chunks():
-                                for chunk in response_stream:
-                                    if chunk.text:
-                                        yield chunk.text
+                    response_stream = None
+                    last_error = ""
 
-                            full_response = st.write_stream(generate_chunks())
-                        
-                        st.session_state.messages.append({"role": "assistant", "content": full_response})
+                    # 1. دریافت هوشمند تمام مدل‌های فعال اکانت شما از گوگل
+                    available_models = []
+                    try:
+                        for m in genai.list_models():
+                            if 'generateContent' in m.supported_generation_methods:
+                                available_models.append(m.name)
                     except Exception as e:
-                        st.error(f"❌ خطا در ارتباط با هوش مصنوعی: {str(e)}")
+                        last_error = str(e)
+
+                    # 2. لیست پشتیبان در صورت عدم دریافت لیست مستقیم
+                    if not available_models:
+                        available_models = [
+                            "models/gemini-2.5-flash",
+                            "models/gemini-2.0-flash",
+                            "models/gemini-1.5-flash",
+                            "models/gemini-1.5-pro"
+                        ]
+
+                    # آماده‌سازی تاریخچه چت
+                    chat_history = []
+                    for msg in st.session_state.messages[-6:]:
+                        role = "user" if msg["role"] == "user" else "model"
+                        chat_history.append({"role": role, "parts": [msg["content"]]})
+
+                    # تلاش برای فراخوانی مدل‌های فعال به ترتیب
+                    for m_name in available_models:
+                        try:
+                            model = genai.GenerativeModel(m_name)
+                            chat = model.start_chat(history=chat_history[:-1])
+                            response_stream = chat.send_message(user_prompt, stream=True)
+                            if response_stream:
+                                break
+                        except Exception as e:
+                            last_error = str(e)
+                            continue
+
+                    if response_stream:
+                        def generate_chunks():
+                            for chunk in response_stream:
+                                if chunk.text:
+                                    yield chunk.text
+
+                        full_response = st.write_stream(generate_chunks)
+                        st.session_state.messages.append({"role": "assistant", "content": full_response})
+                    else:
+                        st.error(f"❌ خطایی در اتصال به جمنای رخ داد: {last_error}")
 
     # ----------------- بخش‌های دیگر -----------------
     elif menu == "🎨 تولید با Flux و ویرایش آزاد عکس":
